@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 import { Activity, ArrowDownRight, ArrowRight, Bell, Check, ChevronDown, CircleHelp, ClipboardCheck, Clock3, FileCheck2, FileText, Filter, Globe2, Inbox, Layers3, LayoutDashboard, Mail, MoreHorizontal, PackageSearch, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, TrendingUp, UploadCloud, Users, Workflow } from "lucide-react";
 
@@ -31,16 +30,12 @@ const activities = [
 type Lead = { id: string; company: string; title: string; region: string; stage: string; owner: string; updated: string; status: string; priority: string };
 
 export default function Home() {
-  const router = useRouter();
   const [companyName, setCompanyName] = useState("Set up company");
   useEffect(() => {
     let alive = true;
     async function loadWorkspace() {
       try {
         const supabase = createClient();
-        const { data: auth, error: authError } = await supabase.auth.getSession();
-        if (authError) throw authError;
-        if (!auth.session) { router.replace("/login"); return; }
         const [{ data: settings, error: settingsError }, { data: rows, error: leadsError }] = await Promise.all([
           supabase.from("company_settings").select("company_name").eq("id", "default").maybeSingle(),
           supabase.from("leads").select("*").order("created_at", { ascending: false })
@@ -63,7 +58,7 @@ export default function Home() {
     }
     void loadWorkspace();
     return () => { alive = false; };
-  }, [router]);
+  }, []);
   const [active, setActive] = useState("Overview");
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("All stages");
@@ -88,8 +83,6 @@ export default function Home() {
     if (!newCompany.trim() || !newTitle.trim()) { setNotice("Enter both a company and an opportunity title."); return; }
     try {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.replace("/login"); return; }
       const { data, error } = await supabase.from("leads").insert({
         company_name: newCompany.trim(),
         opportunity_title: newTitle.trim(),
@@ -97,7 +90,6 @@ export default function Home() {
         status: "Awaiting review",
         stage: "Lead registration",
         priority: "Medium",
-        owner_name: auth.user.email ?? "Admin"
       }).select("*").single();
       if (error) throw error;
       const lead: Lead = { id: data.lead_number, company: data.company_name, title: data.opportunity_title, region: data.sourcing_region, stage: data.stage, owner: "AN", updated: "Just now", status: data.status, priority: data.priority };
@@ -130,7 +122,7 @@ export default function Home() {
       </aside>
 
       <section className="main-panel">
-        <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><strong>{active}</strong></div><div className="top-actions"><div className="system-status"><span></span>All systems operational</div><button className="icon-button" aria-label="Notifications" onClick={()=>notify("You’re all caught up. New supplier replies will appear here.")}><Bell size={18}/><i></i></button><button className="top-avatar" aria-label="Sign out" title="Sign out" onClick={async()=>{try{const supabase=createClient();await supabase.auth.signOut();router.replace("/login");router.refresh();}catch(err){setNotice(err instanceof Error?err.message:"Could not sign out.");}}} style={{border:0,cursor:"pointer"}}>AN</button></div></header>
+        <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><strong>{active}</strong></div><div className="top-actions"><div className="system-status"><span></span>All systems operational</div><button className="icon-button" aria-label="Notifications" onClick={()=>notify("You’re all caught up. New supplier replies will appear here.")}><Bell size={18}/><i></i></button><div className="top-avatar" aria-label="Workspace user" title="AUTOPS workspace">AN</div></div></header>
         <div className="content">
           {notice&&<div className="notice"><Check size={16}/><span>{notice}</span><button onClick={()=>setNotice("")} aria-label="Dismiss notification">×</button></div>}
           {active==="Overview"&&<>
