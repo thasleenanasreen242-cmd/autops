@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Activity, ArrowDownRight, ArrowRight, Bell, Check, ChevronDown, CircleHelp, ClipboardCheck, Clock3, FileCheck2, FileText, Filter, Globe2, Inbox, Layers3, LayoutDashboard, Mail, MoreHorizontal, PackageSearch, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, TrendingUp, UploadCloud, Users, Workflow } from "lucide-react";
 
 const stages = [
@@ -37,6 +37,8 @@ const activities = [
 type Lead = typeof initialLeads[number];
 
 export default function Home() {
+  const [companyName, setCompanyName] = useState("Set up company");
+  useEffect(() => { try { const saved = window.localStorage.getItem("autops-company-settings"); if (saved) { const parsed = JSON.parse(saved); if (typeof parsed.companyName === "string" && parsed.companyName.trim()) setCompanyName(parsed.companyName); } } catch {} }, []);
   const [active, setActive] = useState("Overview");
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("All stages");
@@ -76,7 +78,7 @@ export default function Home() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark"><Workflow size={21} strokeWidth={2.4}/></div><div><div className="brand-name">AUTOPS<span>™</span></div><div className="brand-sub">PROCUREMENT OPERATIONS</div></div></div>
-        <div className="workspace-switch"><div className="workspace-avatar">S</div><div className="workspace-copy"><strong>SensCore Trading</strong><span>Procurement workspace</span></div><ChevronDown size={15}/></div>
+        <div className="workspace-switch"><div className="workspace-avatar">S</div><div className="workspace-copy"><strong>{companyName}</strong><span>Procurement workspace</span></div><ChevronDown size={15}/></div>
         <div className="nav-label">WORKSPACE</div>
         <nav className="nav-list">
           {[{name:"Overview",icon:LayoutDashboard},{name:"Lead intake",icon:ClipboardCheck},{name:"Suppliers",icon:PackageSearch},{name:"RFQs & responses",icon:Inbox},{name:"Quote comparison",icon:Layers3},{name:"Final quotes",icon:FileCheck2}].map(({name,icon:Icon})=><button key={name} className={active===name?"nav-item active":"nav-item"} onClick={()=>{setActive(name);setNotice("");}}><Icon size={17}/><span>{name}</span>{name==="RFQs & responses"&&<span className="nav-count">4</span>}</button>)}
