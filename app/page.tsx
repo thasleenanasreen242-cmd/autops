@@ -83,7 +83,7 @@ export default function Home() {
         </nav>
         <div className="nav-label pipeline-label">PIPELINE STAGES</div>
         <div className="stage-nav">{stages.map((stage,index)=>{const Icon=stage.icon;return <button key={stage.name} onClick={()=>{setActive(stage.short);setNotice("");}} className={active===stage.short?"stage-nav-item selected": "stage-nav-item"}><span className={`stage-dot stage-${index+1}`}></span><span>{stage.short}</span><span className="stage-num">{stage.count}</span></button>})}</div>
-        <div className="sidebar-bottom"><div className="help-card"><div className="help-icon"><CircleHelp size={17}/></div><div><strong>Need a hand?</strong><span>Explore the AUTOPS guide</span></div><ArrowRight size={15}/></div><button className="nav-item muted" onClick={()=>notify("Workspace settings are coming in the next setup milestone.")}><Settings2 size={17}/><span>Settings</span></button><div className="user-profile"><div className="user-avatar">AN</div><div className="user-copy"><strong>Admin User</strong><span>Operations manager</span></div><MoreHorizontal size={18}/></div></div>
+        <div className="sidebar-bottom"><div className="help-card"><div className="help-icon"><CircleHelp size={17}/></div><div><strong>Need a hand?</strong><span>Explore the AUTOPS guide</span></div><ArrowRight size={15}/></div><button className="nav-item muted" onClick={()=>{window.location.href="/settings";}}><Settings2 size={17}/><span>Settings</span></button><div className="user-profile"><div className="user-avatar">AN</div><div className="user-copy"><strong>Admin User</strong><span>Operations manager</span></div><MoreHorizontal size={18}/></div></div>
       </aside>
 
       <section className="main-panel">
