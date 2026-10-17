@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "../lib/supabase/client";
 import { Activity, ArrowDownRight, ArrowRight, Bell, Check, ChevronDown, CircleHelp, ClipboardCheck, Clock3, FileCheck2, FileText, Filter, Globe2, Inbox, Layers3, LayoutDashboard, Mail, MoreHorizontal, PackageSearch, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, TrendingUp, UploadCloud, Users, Workflow } from "lucide-react";
 
 const stages = [
