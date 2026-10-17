@@ -34,21 +34,52 @@ const activities = [
   { color: "violet", title: "RFQ sent successfully", text: "Desert Energy Services · 5 suppliers", time: "2 hrs ago", icon: Send },
 ];
 
-type Lead = typeof initialLeads[number];
+type Lead = { id: string; company: string; title: string; region: string; stage: string; owner: string; updated: string; status: string; priority: string };
 
 export default function Home() {
+  const router = useRouter();
   const [companyName, setCompanyName] = useState("Set up company");
-  useEffect(() => { try { const saved = window.localStorage.getItem("autops-company-settings"); if (saved) { const parsed = JSON.parse(saved); if (typeof parsed.companyName === "string" && parsed.companyName.trim()) setCompanyName(parsed.companyName); } } catch {} }, []);
+  useEffect(() => {
+    let alive = true;
+    async function loadWorkspace() {
+      try {
+        const supabase = createClient();
+        const { data: auth, error: authError } = await supabase.auth.getSession();
+        if (authError) throw authError;
+        if (!auth.session) { router.replace("/login"); return; }
+        const [{ data: settings, error: settingsError }, { data: rows, error: leadsError }] = await Promise.all([
+          supabase.from("company_settings").select("company_name").eq("id", "default").maybeSingle(),
+          supabase.from("leads").select("*").order("created_at", { ascending: false })
+        ]);
+        if (settingsError) throw settingsError;
+        if (leadsError) throw leadsError;
+        if (!alive) return;
+        if (settings?.company_name) setCompanyName(settings.company_name);
+        const mapped: Lead[] = (rows ?? []).map((row: any) => ({
+          id: row.lead_number, company: row.company_name, title: row.opportunity_title,
+          region: row.sourcing_region, stage: row.stage, owner: row.owner_name ?? "AN",
+          updated: row.updated_at ? new Date(row.updated_at).toLocaleDateString() : "",
+          status: row.status, priority: row.priority
+        }));
+        setLeads(mapped);
+        setSelected(mapped[0]?.id ?? "");
+      } catch (err) {
+        if (alive) setNotice(err instanceof Error ? err.message : "Unable to load workspace. Check database setup.");
+      }
+    }
+    void loadWorkspace();
+    return () => { alive = false; };
+  }, [router]);
   const [active, setActive] = useState("Overview");
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("All stages");
-  const [leads, setLeads] = useState(initialLeads);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [notice, setNotice] = useState("");
   const [newCompany, setNewCompany] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [region, setRegion] = useState("UAE + Overseas");
-  const [selected, setSelected] = useState("LEAD-2026-00125");
+  const [selected, setSelected] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>(["Emirates Instrumentation LLC"]);
   const [uploadName, setUploadName] = useState("");
@@ -59,17 +90,33 @@ export default function Home() {
   const currentLead = leads.find((lead) => lead.id === selected) ?? leads[0];
   const filteredSuppliers = suppliers.filter((supplier) => (supplier.name + " " + supplier.country + " " + supplier.category).toLowerCase().includes(supplierSearch.toLowerCase()));
 
-  function addLead() {
+  async function addLead() {
     if (!newCompany.trim() || !newTitle.trim()) { setNotice("Enter both a company and an opportunity title."); return; }
-    const sequence = 125 + leads.length - initialLeads.length + 1;
-    const lead: Lead = { id: `LEAD-2026-${String(sequence).padStart(5, "0")}`, company: newCompany.trim(), title: newTitle.trim(), region, stage: "Lead registration", owner: "AN", updated: "Just now", status: "Awaiting review", priority: "Medium" };
-    setLeads((items) => [lead, ...items]);
-    setSelected(lead.id);
-    setShowLeadForm(false);
-    setNewCompany("");
-    setNewTitle("");
-    setActive("Lead intake");
-    setNotice(`${lead.id} created. Review the details and verify the lead before supplier discovery.`);
+    try {
+      const supabase = createClient();
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) { router.replace("/login"); return; }
+      const { data, error } = await supabase.from("leads").insert({
+        company_name: newCompany.trim(),
+        opportunity_title: newTitle.trim(),
+        sourcing_region: region,
+        status: "Awaiting review",
+        stage: "Lead registration",
+        priority: "Medium",
+        owner_name: auth.user.email ?? "Admin"
+      }).select("*").single();
+      if (error) throw error;
+      const lead: Lead = { id: data.lead_number, company: data.company_name, title: data.opportunity_title, region: data.sourcing_region, stage: data.stage, owner: "AN", updated: "Just now", status: data.status, priority: data.priority };
+      setLeads(items => [lead, ...items]);
+      setSelected(lead.id);
+      setShowLeadForm(false);
+      setNewCompany("");
+      setNewTitle("");
+      setActive("Lead intake");
+      setNotice(`${lead.id} saved to the database. Review the details before supplier discovery.`);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not save lead. Confirm Supabase setup.");
+    }
   }
 
   function notify(message: string) { setNotice(message); }
@@ -110,7 +157,7 @@ export default function Home() {
           </>}
           {active!=="Overview"&&<>
             <div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-dot"></span>PROCUREMENT WORKSPACE</div><h1>{active}</h1><p>{stages.find(s=>s.short===active)?.detail ?? "Manage your procurement operations from one connected workspace."}</p></div><button className="primary-button" onClick={()=>active==="Lead intake"?setShowLeadForm(true):notify("This workspace action will be connected to the live backend in the next implementation step.")}><Plus size={17}/> {active==="Lead intake"?"Register new lead":"New "+(active==="Suppliers"?"supplier":active==="Final quote"?"quote":"record")}</button></div>
-            {active==="Lead intake"&&<div className="workspace-grid"><section className="surface workflow-surface"><div className="surface-heading"><div><h2>Lead register</h2><p>Register an opportunity, choose a sourcing region and track verification.</p></div><span className="record-count">{leads.length} records</span></div><div className="table-controls"><div className="search-box"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search leads..." aria-label="Search leads"/></div><select value={stageFilter} onChange={e=>setStageFilter(e.target.value)} aria-label="Filter stage"><option>All stages</option>{stages.map(s=><option key={s.name}>{s.name}</option>)}</select></div><div className="table-wrap"><table><thead><tr><th>LEAD / COMPANY</th><th>REGION</th><th>STAGE</th><th>STATUS</th></tr></thead><tbody>{filteredLeads.map(lead=><tr key={lead.id} onClick={()=>setSelected(lead.id)}><td><div className="lead-title">{lead.company}</div><div className="lead-id">{lead.id}</div><div className="lead-subtitle">{lead.title}</div></td><td>{lead.region}</td><td><span className="stage-pill">{lead.stage}</span></td><td><span className="status-pill status-neutral"><i></i>{lead.status}</span></td></tr>)}</tbody></table></div></section><section className="surface detail-surface"><div className="surface-heading"><div><h2>Lead overview</h2><p>Selected opportunity</p></div><span className="status-pill status-blue"><i></i>{currentLead?.status}</span></div><div className="detail-id">{currentLead?.id}</div><h3>{currentLead?.company}</h3><p className="detail-description">{currentLead?.title}</p><div className="detail-fields"><div><span>Sourcing region</span><strong>{currentLead?.region}</strong></div><div><span>Assigned owner</span><strong>{currentLead?.owner==="AN"?"Admin User":"Operations team"}</strong></div><div><span>Current stage</span><strong>{currentLead?.stage}</strong></div><div><span>Last updated</span><strong>{currentLead?.updated}</strong></div></div><div className="detail-actions"><button className="secondary-button" onClick={()=>notify("Lead details are ready for review. Backend persistence will be connected after Supabase setup.")}>Review details</button><button className="primary-button" onClick={()=>{setLeads(items=>items.map(l=>l.id===selected?{...l,status:"Verified",stage:"Supplier discovery",updated:"Just now"}:l));setNotice(`${selected} marked verified and moved to supplier discovery (demo state).`);}}> <Check size={15}/> Verify lead</button></div><div className="ai-hint"><Sparkles size={17}/><div><strong>AI document extraction</strong><p>Upload a company profile, RFQ or specification to extract fields and prefill the lead. AI processing requires API credentials to be configured.</p><label className="upload-inline"><UploadCloud size={15}/> {uploadName||"Choose document"}<input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={e=>setUploadName(e.target.files?.[0]?.name??"")} /></label></div></div></section></div>}
+            {active==="Lead intake"&&<div className="workspace-grid"><section className="surface workflow-surface"><div className="surface-heading"><div><h2>Lead register</h2><p>Register an opportunity, choose a sourcing region and track verification.</p></div><span className="record-count">{leads.length} records</span></div><div className="table-controls"><div className="search-box"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search leads..." aria-label="Search leads"/></div><select value={stageFilter} onChange={e=>setStageFilter(e.target.value)} aria-label="Filter stage"><option>All stages</option>{stages.map(s=><option key={s.name}>{s.name}</option>)}</select></div><div className="table-wrap"><table><thead><tr><th>LEAD / COMPANY</th><th>REGION</th><th>STAGE</th><th>STATUS</th></tr></thead><tbody>{filteredLeads.map(lead=><tr key={lead.id} onClick={()=>setSelected(lead.id)}><td><div className="lead-title">{lead.company}</div><div className="lead-id">{lead.id}</div><div className="lead-subtitle">{lead.title}</div></td><td>{lead.region}</td><td><span className="stage-pill">{lead.stage}</span></td><td><span className="status-pill status-neutral"><i></i>{lead.status}</span></td></tr>)}</tbody></table></div></section><section className="surface detail-surface"><div className="surface-heading"><div><h2>Lead overview</h2><p>Selected opportunity</p></div><span className="status-pill status-blue"><i></i>{currentLead?.status}</span></div><div className="detail-id">{currentLead?.id}</div><h3>{currentLead?.company}</h3><p className="detail-description">{currentLead?.title}</p><div className="detail-fields"><div><span>Sourcing region</span><strong>{currentLead?.region}</strong></div><div><span>Assigned owner</span><strong>{currentLead?.owner==="AN"?"Admin User":"Operations team"}</strong></div><div><span>Current stage</span><strong>{currentLead?.stage}</strong></div><div><span>Last updated</span><strong>{currentLead?.updated}</strong></div></div><div className="detail-actions"><button className="secondary-button" onClick={()=>notify("Lead details are ready for review. Backend persistence will be connected after Supabase setup.")}>Review details</button><button className="primary-button" onClick={async()=>{try{const supabase=createClient();const {error}=await supabase.from("leads").update({status:"Verified",stage:"Supplier discovery",verified_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("lead_number",selected);if(error)throw error;setLeads(items=>items.map(l=>l.id===selected?{...l,status:"Verified",stage:"Supplier discovery",updated:"Just now"}:l));setNotice(`${selected} saved as verified and moved to supplier discovery.`);}catch(err){setNotice(err instanceof Error?err.message:"Could not update lead.");}}}> <Check size={15}/> Verify lead</button></div><div className="ai-hint"><Sparkles size={17}/><div><strong>AI document extraction</strong><p>Upload a company profile, RFQ or specification to extract fields and prefill the lead. AI processing requires API credentials to be configured.</p><label className="upload-inline"><UploadCloud size={15}/> {uploadName||"Choose document"}<input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={e=>setUploadName(e.target.files?.[0]?.name??"")} /></label></div></div></section></div>}
             {active==="Suppliers"&&<div className="surface workflow-surface"><div className="surface-heading"><div><h2>Supplier directory</h2><p>Discover relevant suppliers and build a shortlist for each opportunity.</p></div><span className="record-count">{suppliers.length} sample suppliers</span></div><div className="table-controls"><div className="search-box"><Search size={15}/><input value={supplierSearch} onChange={e=>setSupplierSearch(e.target.value)} placeholder="Search suppliers, country or capability..." aria-label="Search suppliers"/></div><button className="filter-button" onClick={()=>notify("Region filters will be populated from supplier records.")}><Globe2 size={14}/> Region</button></div><div className="supplier-list">{filteredSuppliers.map(s=><div className="supplier-row" key={s.name}><input type="checkbox" checked={selectedSuppliers.includes(s.name)} onChange={e=>setSelectedSuppliers(old=>e.target.checked?[...old,s.name]:old.filter(n=>n!==s.name))} aria-label={`Select ${s.name}`}/><div className="supplier-monogram">{s.name.split(" ").map(w=>w[0]).slice(0,2).join("")}</div><div className="supplier-main"><strong>{s.name}</strong><span>{s.category} · {s.country}</span><small>{s.source}</small></div><div className="match-score"><strong>{s.match}%</strong><span>match</span><div><i style={{width:s.match+"%"}}/></div></div><button className="row-more" onClick={()=>notify(`${s.name}: ${s.category}. This is sample supplier data until the live directory is connected.`)} aria-label={`View ${s.name}`}><ArrowRight size={15}/></button></div>)}</div><div className="table-footer"><span>{selectedSuppliers.length} supplier(s) selected</span><button onClick={()=>notify(`Shortlist prepared for ${currentLead?.id}: ${selectedSuppliers.join(", ")||"no suppliers selected"} (demo only).`)}>Prepare RFQ shortlist <ArrowRight size={14}/></button></div></div>}
             {active!=="Lead intake"&&active!=="Suppliers"&&<div className="workspace-grid"><section className="surface workflow-surface"><div className="surface-heading"><div><h2>{active} queue</h2><p>Work items grouped by lead, owner and next action.</p></div><span className="record-count">Demo workspace</span></div><div className="table-wrap"><table><thead><tr><th>REFERENCE</th><th>OPPORTUNITY</th><th>STATUS</th><th>NEXT ACTION</th></tr></thead><tbody>{leads.slice(0,4).map((lead,i)=><tr key={lead.id} onClick={()=>{setSelected(lead.id);setActive("Lead intake");}}><td><div className="lead-id">{active==="RFQs & responses"?"RFQ-2026-000"+(84-i):active==="Final quote"?"QUOTE-2026-000"+(31-i):lead.id}</div></td><td><div className="lead-title">{lead.company}</div><div className="lead-id">{lead.title}</div></td><td><span className={`status-pill ${i===0?"status-blue":i===1?"status-amber":"status-neutral"}`}><i></i>{i===0?"Needs review":i===1?"Waiting for supplier":"In progress"}</span></td><td><button className="inline-action" onClick={e=>{e.stopPropagation();notify("Action queued in this demo. Live email and quotation workflows require service credentials.")}}>Review <ArrowRight size={13}/></button></td></tr>)}</tbody></table></div><div className="placeholder-feature"><div className="placeholder-icon"><Sparkles size={19}/></div><div><strong>Designed for real procurement workflows</strong><p>RFQ email delivery, shared inbox processing, quote extraction and final PDF generation will be activated as integrations are configured.</p></div></div></section><section className="surface detail-surface"><div className="surface-heading"><div><h2>Workflow checklist</h2><p>Key actions for this stage</p></div></div><div className="checklist">{["Confirm lead details and specifications","Review supplier and region eligibility","Check commercial terms and deadlines","Record the decision and next action"].map((item,i)=><label key={item}><input type="checkbox"/><span>{item}</span></label>)}</div><div className="ai-hint"><Sparkles size={17}/><div><strong>AI-assisted operations</strong><p>Automations will support document parsing, supplier matching, response extraction and commercial comparison, with operator review at each critical step.</p></div></div></section></div>}
           </>}
