@@ -130,7 +130,7 @@ export default function Home() {
       </aside>
 
       <section className="main-panel">
-        <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><strong>{active}</strong></div><div className="top-actions"><div className="system-status"><span></span>All systems operational</div><button className="icon-button" aria-label="Notifications" onClick={()=>notify("You’re all caught up. New supplier replies will appear here.")}><Bell size={18}/><i></i></button><div className="top-avatar">AN</div></div></header>
+        <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><strong>{active}</strong></div><div className="top-actions"><div className="system-status"><span></span>All systems operational</div><button className="icon-button" aria-label="Notifications" onClick={()=>notify("You’re all caught up. New supplier replies will appear here.")}><Bell size={18}/><i></i></button><button className="top-avatar" aria-label="Sign out" title="Sign out" onClick={async()=>{try{const supabase=createClient();await supabase.auth.signOut();router.replace("/login");router.refresh();}catch(err){setNotice(err instanceof Error?err.message:"Could not sign out.");}}} style={{border:0,cursor:"pointer"}}>AN</button></div></header>
         <div className="content">
           {notice&&<div className="notice"><Check size={16}/><span>{notice}</span><button onClick={()=>setNotice("")} aria-label="Dismiss notification">×</button></div>}
           {active==="Overview"&&<>
